@@ -1,6 +1,6 @@
 # ============================================================================
-# FINAL SMART MULTI-FRAMEWORK PROPERTY MANAGEMENT SYSTEM
-# OpenAI + Rule-Based + A2A Communication with Smart GPT Analysis
+# ENHANCED PROPERTY MANAGEMENT SYSTEM - FINAL VERSION
+# Superior AI Detection for ALL Cleaning & Maintenance Issues
 # ============================================================================
 
 import asyncio
@@ -20,6 +20,9 @@ import logging
 import time
 import hashlib
 from typing import Dict, List, Any, Optional
+import concurrent.futures
+from concurrent.futures import ThreadPoolExecutor, as_completed
+import aiohttp
 
 load_dotenv()
 nest_asyncio.apply()
@@ -31,13 +34,17 @@ nest_asyncio.apply()
 APIFY_API_KEY = os.getenv("APIFY_API_KEY")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 
+# EMAIL CONFIGURATION
 EMAIL_CONFIG = {
     'sender_email': os.getenv('SENDER_EMAIL'),
     'sender_password': os.getenv('GMAIL_APP_PASSWORD'),
     'cleaning_team_email': os.getenv('CLEANING_TEAM_EMAIL'),
+    'maintenance_team_email': os.getenv('SENDER_EMAIL'),
+    'pricing_team_email': os.getenv('SENDER_EMAIL'),
     'demo_mode': False
 }
 
+# ALL 7 PROPERTIES
 LISTINGS = [
     ("Room N5 Downtown", "https://www.booking.com/hotel/ca/room-n5-in-a-shared-apartment-in-downtown-montreal.fr.html", 200),
     ("Room 1 Full Luxury", "https://www.booking.com/hotel/ca/room-1-full-equipped-in-big-luxury-apartment-in-downtown-montreal.fr.html", 300),
@@ -48,650 +55,382 @@ LISTINGS = [
     ("Room N7 Shared", "https://www.booking.com/hotel/ca/room-n7-in-a-shared-apartment-in-downtown-montreal.fr.html", 155),
 ]
 
+# PARALLEL PROCESSING LIMITS
+MAX_CONCURRENT_SCRAPING = 3
+MAX_CONCURRENT_GPT = 5
+MAX_CONCURRENT_EMAILS = 3
+
 # ============================================================================
-# FRAMEWORK 1: SMART OPENAI AGENT - Analyzes EVERYTHING automatically
+# ENHANCED GPT-4 PROCESSOR WITH SUPERIOR CLEANING DETECTION
 # ============================================================================
 
-class SmartOpenAIAgent:
-    """
-    Smart OpenAI Agent that automatically detects ALL issues from guest comments
-    No need for separate cleaning/maintenance functions - GPT is smart enough!
-    """
+class EnhancedGPTProcessor:
+    """Enhanced GPT-4 processor that catches ALL cleaning and maintenance issues"""
     
     def __init__(self, api_key: str):
         self.api_key = api_key
-        self.agent_id = "smart_openai_agent"
-        self.conversation_history = []
-        self.performance_metrics = {"analyses_completed": 0, "confidence_avg": 0.0}
+        self.session = None
+        
+    async def create_session(self):
+        """Create reusable HTTP session for speed"""
+        if not self.session:
+            timeout = aiohttp.ClientTimeout(total=45)  # Increased timeout for thorough analysis
+            self.session = aiohttp.ClientSession(timeout=timeout)
     
-    def analyze_all_guest_feedback(self, positive_comments, negative_comments):
-        """
-        Smart unified analysis - GPT analyzes EVERYTHING automatically:
-        cleaning, maintenance, AC, TV, bed, WiFi, satisfaction, pricing recommendations
-        """
+    async def close_session(self):
+        """Clean up session"""
+        if self.session:
+            await self.session.close()
+    
+    async def batch_analyze_properties(self, property_data_list):
+        """Analyze multiple properties with ENHANCED cleaning detection"""
+        await self.create_session()
+        
+        # Create concurrent tasks for all properties
+        tasks = []
+        for property_data in property_data_list:
+            task = self.analyze_single_property_enhanced(
+                property_data['name'],
+                property_data['positive_comments'],
+                property_data['negative_comments']
+            )
+            tasks.append(task)
+        
+        # Execute all analyses in parallel
+        results = await asyncio.gather(*tasks, return_exceptions=True)
+        
+        # Process results
+        property_analyses = {}
+        for i, result in enumerate(results):
+            property_name = property_data_list[i]['name']
+            if isinstance(result, Exception):
+                print(f"❌ Error analyzing {property_name}: {result}")
+                property_analyses[property_name] = self._enhanced_fallback_analysis(property_data_list[i]['negative_comments'])
+            else:
+                property_analyses[property_name] = result
+        
+        await self.close_session()
+        return property_analyses
+    
+    async def analyze_single_property_enhanced(self, property_name, positive_comments, negative_comments):
+        """ENHANCED analysis that catches ALL cleaning issues"""
         if not positive_comments and not negative_comments:
             return self._empty_analysis()
         
-        # Combine all comments for comprehensive analysis
+        # Combine comments efficiently
         all_comments = []
-        for i, comment in enumerate(positive_comments):
+        for i, comment in enumerate(positive_comments[:20]):  # Increased limit
             all_comments.append(f"POSITIVE {i+1}: {comment}")
-        for i, comment in enumerate(negative_comments):
+        for i, comment in enumerate(negative_comments[:20]):  # Increased limit
             all_comments.append(f"NEGATIVE {i+1}: {comment}")
         
         comments_text = "\n".join(all_comments)
         
-        # Smart GPT prompt - let GPT figure out everything
-        smart_prompt = f"""
-You are an expert property analyst. Analyze these REAL guest comments comprehensively.
+        # SUPER ENHANCED GPT prompt for MAXIMUM cleaning detection
+        enhanced_prompt = f"""
+PROPERTY INSPECTION ANALYSIS - {property_name}
 
-GUEST COMMENTS:
+You are a EXPERT PROPERTY INSPECTOR analyzing guest feedback. Your job is to find EVERY SINGLE cleaning and maintenance issue mentioned.
+
+GUEST COMMENTS TO ANALYZE:
 {comments_text}
 
-Provide a complete analysis in JSON format:
+CRITICAL CLEANING DETECTION INSTRUCTIONS:
+You MUST detect ANY mention of these cleaning-related words/concepts:
+
+🧹 CLEANING ISSUES TO DETECT:
+- dirty, dirt, dusty, dust, messy, mess, unclean, not clean, needs cleaning
+- stained, stains, spots, marks, residue, grime, grimy, filthy
+- smells, odor, odour, stinks, stinky, musty, moldy, mold, mildew
+- hair, hairs (any type), soap scum, grease, greasy, sticky, crusty
+- untidy, unkempt, sloppy, gross, disgusting, nasty, yucky
+- "could be cleaner", "not very clean", "poorly cleaned", "needs attention"
+- bathroom issues: toilet dirty, shower dirty, sink dirty, mirror spots
+- kitchen issues: dishes dirty, counters dirty, appliances dirty
+- bedroom issues: sheets dirty, pillows dirty, floor dirty, surfaces dirty
+- general: windows dirty, walls dirty, floors dirty, furniture dirty
+
+🔧 MAINTENANCE ISSUES TO DETECT:
+- broken, not working, doesn't work, malfunction, out of order
+- slow, fast, loud, noisy, quiet, silent, flickering, dim, bright
+- hot, cold, warm, cool, uncomfortable, hard, soft, loose, tight
+- stuck, jammed, leaking, dripping, cracked, chipped, torn, worn
+- WiFi slow, TV problems, AC issues, heating problems, bed uncomfortable
+- plumbing issues, electrical problems, appliance failures
+
+ANALYSIS REQUIREMENTS:
+1. Read EVERY comment word by word
+2. Extract MULTIPLE issues from single comments when present
+3. Even minor mentions count (like "a bit dirty" = cleaning issue)
+4. Classify location precisely (bathroom/kitchen/bedroom/living room)
+5. Rate severity realistically (guest complaints = at least Medium severity)
+
+Return comprehensive JSON:
 {{
-    "satisfaction_score": "0-100 based on overall guest sentiment",
+    "satisfaction_score": 75,
     "cleaning_issues": [
         {{
-            "guest_comment": "exact guest quote",
-            "problem": "specific cleaning issue (bathroom dirty, dust, stains, smell, etc.)",
-            "location": "bathroom/kitchen/bedroom/general",
-            "severity": "Low/Medium/High"
+            "guest_comment": "EXACT quote mentioning cleaning issue",
+            "problem": "Detailed description of specific cleaning problem",
+            "location": "bathroom/kitchen/bedroom/living room/general",
+            "severity": "High/Medium/Low",
+            "cleaning_type": "surface/deep/maintenance/odor/stain",
+            "keywords_detected": ["list", "of", "cleaning", "keywords", "found"]
         }}
     ],
     "maintenance_issues": [
         {{
-            "guest_comment": "exact guest quote",
-            "problem": "specific maintenance issue (AC, TV, bed, WiFi, plumbing, electrical, etc.)",
-            "category": "AC/TV/Bed/WiFi/Plumbing/Electrical/Noise/Other",
-            "severity": "Low/Medium/High",
-            "urgency": "Can wait/Soon/Urgent"
+            "guest_comment": "EXACT quote mentioning maintenance issue",
+            "problem": "Detailed description of specific maintenance problem", 
+            "category": "AC/TV/Bed/WiFi/Plumbing/Electrical/Noise/Appliances/Furniture/Other",
+            "severity": "High/Medium/Low",
+            "urgency": "Urgent/Soon/Can wait",
+            "keywords_detected": ["list", "of", "maintenance", "keywords", "found"]
         }}
     ],
-    "positive_highlights": [
-        "things guests specifically loved about the property"
-    ],
-    "guest_sentiment": "overall emotional tone (very happy/satisfied/neutral/frustrated/angry)",
-    "recommended_price_change": "percentage change from -25 to +20 based on satisfaction and issues",
-    "summary": {{
-        "main_problems": ["top 3 most mentioned issues"],
-        "strongest_positives": ["top 2 things guests loved"],
-        "immediate_actions": ["most urgent things to fix"],
-        "overall_rating": "A/B/C/D/F grade for this property"
-    }},
-    "confidence": "0.0-1.0 confidence in this analysis"
+    "guest_sentiment": "very satisfied/satisfied/neutral/frustrated/very frustrated",
+    "recommended_price_change": -5,
+    "confidence": 0.9,
+    "analysis_statistics": {{
+        "total_comments_analyzed": {len(all_comments)},
+        "negative_comments": {len(negative_comments)},
+        "positive_comments": {len(positive_comments)},
+        "cleaning_mentions_detected": 0,
+        "maintenance_mentions_detected": 0,
+        "comments_with_issues": 0
+    }}
 }}
 
-Be smart and comprehensive:
-- Automatically detect ALL types of issues (cleaning, AC, TV, bed comfort, WiFi, plumbing, noise, etc.)
-- Calculate satisfaction based on positive vs negative sentiment
-- Recommend price changes based on guest feedback quality
-- Identify what guests love most and what frustrates them most
-- Give actionable insights for immediate improvement
+CRITICAL: Do NOT miss cleaning issues. Every guest complaint about cleanliness costs revenue and reputation. Be thorough and comprehensive.
 """
         
         try:
-            response = requests.post(
-                "https://api.openai.com/v1/chat/completions",
-                headers={
-                    "Authorization": f"Bearer {self.api_key}",
-                    "Content-Type": "application/json"
-                },
-                json={
-                    "model": "gpt-4",
-                    "messages": [
-                        {
-                            "role": "system",
-                            "content": "You are an expert property management consultant with years of experience analyzing guest feedback. Provide comprehensive, actionable insights."
-                        },
-                        {
-                            "role": "user",
-                            "content": smart_prompt
-                        }
-                    ],
-                    "temperature": 0.1,
-                    "max_tokens": 2500
-                },
-                timeout=30
-            )
+            headers = {
+                "Authorization": f"Bearer {self.api_key}",
+                "Content-Type": "application/json"
+            }
             
-            if response.status_code == 200:
-                result = response.json()
-                gpt_response = result["choices"][0]["message"]["content"].strip()
-                
-                try:
-                    # Parse GPT's comprehensive analysis
-                    analysis = json.loads(gpt_response)
+            payload = {
+                "model": "gpt-4",
+                "messages": [
+                    {
+                        "role": "system",
+                        "content": "You are an expert property inspector and hospitality consultant. Your expertise is finding EVERY cleaning and maintenance issue in guest feedback. Missing issues costs money and guest satisfaction. Be extremely thorough - err on the side of detecting MORE issues rather than fewer."
+                    },
+                    {
+                        "role": "user",
+                        "content": enhanced_prompt
+                    }
+                ],
+                "temperature": 0.05,  # Very low for consistency
+                "max_tokens": 4000    # Increased for detailed analysis
+            }
+            
+            async with self.session.post(
+                "https://api.openai.com/v1/chat/completions",
+                headers=headers,
+                json=payload
+            ) as response:
+                if response.status == 200:
+                    result = await response.json()
+                    gpt_response = result["choices"][0]["message"]["content"].strip()
                     
-                    # Update performance metrics
-                    self.performance_metrics["analyses_completed"] += 1
-                    confidence = analysis.get("confidence", 0.5)
-                    current_avg = self.performance_metrics["confidence_avg"]
-                    count = self.performance_metrics["analyses_completed"]
-                    self.performance_metrics["confidence_avg"] = (current_avg * (count-1) + confidence) / count
-                    
-                    # Log for learning
-                    self.conversation_history.append({
-                        "timestamp": datetime.now(),
-                        "total_comments": len(all_comments),
-                        "positive_count": len(positive_comments),
-                        "negative_count": len(negative_comments),
-                        "analysis": analysis,
-                        "confidence": confidence
-                    })
-                    
-                    return analysis
-                    
-                except json.JSONDecodeError:
-                    print(f"GPT response wasn't valid JSON, using fallback")
-                    return self._fallback_analysis(positive_comments, negative_comments)
+                    try:
+                        analysis = json.loads(gpt_response)
+                        
+                        # Validate detection quality
+                        cleaning_count = len(analysis.get("cleaning_issues", []))
+                        maintenance_count = len(analysis.get("maintenance_issues", []))
+                        negative_count = len(negative_comments)
+                        
+                        print(f"✅ Enhanced analysis complete: {property_name}")
+                        print(f"   📝 Total comments: {len(all_comments)} (Positive: {len(positive_comments)}, Negative: {negative_count})")
+                        print(f"   🧹 Cleaning issues detected: {cleaning_count}")
+                        print(f"   🔧 Maintenance issues detected: {maintenance_count}")
+                        print(f"   📊 Detection rate: {(cleaning_count + maintenance_count) / max(negative_count, 1):.1f} issues per negative comment")
+                        
+                        # Quality check warnings
+                        if negative_count > 2 and cleaning_count == 0:
+                            print(f"   ⚠️ WARNING: {negative_count} negative comments but NO cleaning issues detected!")
+                        
+                        if negative_count > 5 and (cleaning_count + maintenance_count) < 2:
+                            print(f"   ⚠️ WARNING: Low detection rate - only {cleaning_count + maintenance_count} issues from {negative_count} negative comments!")
+                        
+                        return analysis
+                        
+                    except json.JSONDecodeError:
+                        print(f"⚠️ JSON decode error for {property_name}, using enhanced fallback")
+                        return self._enhanced_fallback_analysis(negative_comments)
+                else:
+                    print(f"❌ GPT API error for {property_name}: {response.status}")
+                    return self._enhanced_fallback_analysis(negative_comments)
                     
         except Exception as e:
-            print(f"Error in smart GPT analysis: {e}")
-            return self._fallback_analysis(positive_comments, negative_comments)
+            print(f"❌ Error in enhanced analysis for {property_name}: {e}")
+            return self._enhanced_fallback_analysis(negative_comments)
     
-    def _fallback_analysis(self, positive_comments, negative_comments):
-        """Simple fallback if GPT fails"""
-        total = len(positive_comments) + len(negative_comments)
-        if total == 0:
-            return self._empty_analysis()
+    def _enhanced_fallback_analysis(self, negative_comments):
+        """Enhanced fallback with aggressive keyword detection"""
         
-        satisfaction = (len(positive_comments) / total) * 100
+        # Comprehensive keyword lists
+        cleaning_keywords = {
+            'dirty': ['dirty', 'dirt', 'unclean', 'not clean', 'filthy', 'grimy', 'messy', 'mess'],
+            'stains': ['stained', 'stains', 'spots', 'marks', 'residue'],
+            'odors': ['smell', 'smells', 'odor', 'odour', 'stink', 'musty', 'moldy'],
+            'dust': ['dust', 'dusty', 'hair', 'hairs'],
+            'general': ['gross', 'disgusting', 'nasty', 'needs cleaning', 'could be cleaner', 'poorly cleaned']
+        }
         
-        # Basic keyword detection
+        maintenance_keywords = {
+            'broken': ['broken', 'not working', "doesn't work", 'malfunction', 'out of order'],
+            'comfort': ['uncomfortable', 'hard', 'soft', 'loud', 'noisy'],
+            'temperature': ['hot', 'cold', 'warm', 'cool'],
+            'electrical': ['flickering', 'dim', 'bright', 'slow wifi', 'wifi slow'],
+            'plumbing': ['leaking', 'dripping', 'stuck', 'jammed']
+        }
+        
         cleaning_issues = []
         maintenance_issues = []
         
-        all_negative = " ".join(negative_comments).lower()
+        for comment in negative_comments:
+            comment_lower = comment.lower()
+            
+            # Check for cleaning issues (multiple per comment)
+            for category, keywords in cleaning_keywords.items():
+                for keyword in keywords:
+                    if keyword in comment_lower:
+                        cleaning_issues.append({
+                            "guest_comment": comment,
+                            "problem": f"Guest mentioned {category}: '{keyword}'",
+                            "location": "general",
+                            "severity": "Medium",
+                            "cleaning_type": category,
+                            "keywords_detected": [keyword]
+                        })
+                        break  # One per category per comment
+            
+            # Check for maintenance issues (multiple per comment)
+            for category, keywords in maintenance_keywords.items():
+                for keyword in keywords:
+                    if keyword in comment_lower:
+                        maintenance_issues.append({
+                            "guest_comment": comment,
+                            "problem": f"Guest mentioned {category}: '{keyword}'",
+                            "category": "Other",
+                            "severity": "Medium",
+                            "urgency": "Soon",
+                            "keywords_detected": [keyword]
+                        })
+                        break  # One per category per comment
         
-        if any(word in all_negative for word in ['dirty', 'clean', 'dust', 'stain', 'smell', 'bathroom']):
-            cleaning_issues.append({
-                "guest_comment": "Multiple cleaning complaints detected",
-                "problem": "General cleanliness issues",
-                "location": "general",
-                "severity": "Medium"
-            })
+        # Calculate satisfaction based on issues found
+        total_issues = len(cleaning_issues) + len(maintenance_issues)
+        satisfaction = max(50, 90 - (total_issues * 8))
         
-        if any(word in all_negative for word in ['ac', 'tv', 'bed', 'wifi', 'broken', 'not working']):
-            maintenance_issues.append({
-                "guest_comment": "Multiple maintenance complaints detected", 
-                "problem": "Equipment or facility issues",
-                "category": "General",
-                "severity": "Medium",
-                "urgency": "Soon"
-            })
+        print(f"   🔄 FALLBACK ANALYSIS:")
+        print(f"   📝 Negative comments: {len(negative_comments)}")
+        print(f"   🧹 Cleaning issues found: {len(cleaning_issues)}")
+        print(f"   🔧 Maintenance issues found: {len(maintenance_issues)}")
         
         return {
             "satisfaction_score": satisfaction,
             "cleaning_issues": cleaning_issues,
             "maintenance_issues": maintenance_issues,
-            "positive_highlights": positive_comments[:3] if positive_comments else [],
-            "guest_sentiment": "neutral",
-            "recommended_price_change": 0,
-            "summary": {
-                "main_problems": ["Analysis incomplete"],
-                "overall_rating": "C"
-            },
-            "confidence": 0.4
+            "guest_sentiment": "frustrated" if total_issues > 3 else "neutral",
+            "recommended_price_change": -min(total_issues * 3, 15),
+            "confidence": 0.7,
+            "analysis_statistics": {
+                "total_comments_analyzed": len(negative_comments),
+                "negative_comments": len(negative_comments),
+                "positive_comments": 0,
+                "cleaning_mentions_detected": len(cleaning_issues),
+                "maintenance_mentions_detected": len(maintenance_issues),
+                "comments_with_issues": len(set([issue["guest_comment"] for issue in cleaning_issues + maintenance_issues]))
+            }
         }
     
     def _empty_analysis(self):
-        """Return empty analysis structure"""
+        """Empty analysis for properties with no comments"""
         return {
             "satisfaction_score": 80,
             "cleaning_issues": [],
             "maintenance_issues": [],
-            "positive_highlights": [],
             "guest_sentiment": "neutral",
             "recommended_price_change": 0,
-            "summary": {"main_problems": [], "overall_rating": "B"},
-            "confidence": 0.3
+            "confidence": 0.3,
+            "analysis_statistics": {
+                "total_comments_analyzed": 0,
+                "negative_comments": 0,
+                "positive_comments": 0,
+                "cleaning_mentions_detected": 0,
+                "maintenance_mentions_detected": 0,
+                "comments_with_issues": 0
+            }
         }
 
 # ============================================================================
-# FRAMEWORK 2: RULE-BASED PRICING ENGINE - Transparent decisions
+# PARALLEL SCRAPING ENGINE (UNCHANGED)
 # ============================================================================
 
-class RuleBasedPricingEngine:
-    """
-    Transparent rule-based pricing that combines GPT recommendations with business rules
-    """
+class ParallelScrapingEngine:
+    """High-speed parallel scraping for all 7 properties"""
     
-    def __init__(self):
-        self.agent_id = "rule_based_pricing_engine"
-        self.decision_history = []
-        self.performance_metrics = {"decisions_made": 0, "avg_adjustment": 0.0}
+    def __init__(self, api_key):
+        self.api_key = api_key
         
-        # Explicit business rules
-        self.pricing_rules = {
-            "satisfaction_bands": {
-                (95, 100): {"base_adjustment": 0.15, "description": "Exceptional - premium pricing"},
-                (90, 94): {"base_adjustment": 0.08, "description": "Excellent - price increase"},
-                (85, 89): {"base_adjustment": 0.03, "description": "Good - small increase"},
-                (80, 84): {"base_adjustment": 0.0, "description": "Average - maintain price"},
-                (70, 79): {"base_adjustment": -0.08, "description": "Below average - reduce price"},
-                (60, 69): {"base_adjustment": -0.15, "description": "Poor - significant reduction"},
-                (0, 59): {"base_adjustment": -0.25, "description": "Critical - major reduction"}
-            },
-            "issue_penalties": {
-                "high_severity_cleaning": -0.10,
-                "medium_severity_cleaning": -0.05,
-                "high_severity_maintenance": -0.08,
-                "medium_severity_maintenance": -0.04,
-                "multiple_issues": -0.03
-            },
-            "gpt_weight": 0.6,  # 60% weight to GPT recommendation, 40% to rules
-            "max_total_adjustment": 0.25
-        }
-    
-    def calculate_smart_pricing(self, property_name, gpt_analysis, base_price):
-        """
-        Smart pricing that combines GPT insights with transparent business rules
-        """
-        satisfaction_score = gpt_analysis.get("satisfaction_score", 80)
-        gpt_price_rec = gpt_analysis.get("recommended_price_change", 0)
-        cleaning_issues = gpt_analysis.get("cleaning_issues", [])
-        maintenance_issues = gpt_analysis.get("maintenance_issues", [])
-        confidence = gpt_analysis.get("confidence", 0.5)
+    async def scrape_all_properties_parallel(self):
+        """Scrape all 7 properties in parallel batches for maximum speed"""
+        print(f"🚀 PARALLEL SCRAPING: Starting {len(LISTINGS)} properties in batches of {MAX_CONCURRENT_SCRAPING}")
         
-        # Step 1: Rule-based adjustment from satisfaction
-        rule_adjustment = 0.0
-        rule_description = "No rule matched"
+        semaphore = asyncio.Semaphore(MAX_CONCURRENT_SCRAPING)
         
-        for (min_score, max_score), rule in self.pricing_rules["satisfaction_bands"].items():
-            if min_score <= satisfaction_score <= max_score:
-                rule_adjustment = rule["base_adjustment"]
-                rule_description = rule["description"]
-                break
+        async def scrape_with_semaphore(property_data):
+            async with semaphore:
+                return await self.scrape_single_property(property_data)
         
-        # Step 2: Apply issue penalties
-        issue_penalty = 0.0
-        issue_details = []
+        scraping_tasks = []
+        for name, url, price in LISTINGS:
+            task = scrape_with_semaphore((name, url, price))
+            scraping_tasks.append(task)
         
-        # Cleaning issue penalties
-        high_cleaning = len([i for i in cleaning_issues if i.get("severity") == "High"])
-        medium_cleaning = len([i for i in cleaning_issues if i.get("severity") == "Medium"])
+        start_time = time.time()
+        results = await asyncio.gather(*scraping_tasks, return_exceptions=True)
+        end_time = time.time()
         
-        if high_cleaning > 0:
-            penalty = self.pricing_rules["issue_penalties"]["high_severity_cleaning"]
-            issue_penalty += penalty
-            issue_details.append(f"High cleaning issues: {penalty:.1%}")
+        all_reviews = []
+        successful_scrapes = 0
         
-        if medium_cleaning > 0:
-            penalty = self.pricing_rules["issue_penalties"]["medium_severity_cleaning"]
-            issue_penalty += penalty
-            issue_details.append(f"Medium cleaning issues: {penalty:.1%}")
-        
-        # Maintenance issue penalties
-        high_maintenance = len([i for i in maintenance_issues if i.get("severity") == "High"])
-        medium_maintenance = len([i for i in maintenance_issues if i.get("severity") == "Medium"])
-        
-        if high_maintenance > 0:
-            penalty = self.pricing_rules["issue_penalties"]["high_severity_maintenance"]
-            issue_penalty += penalty
-            issue_details.append(f"High maintenance issues: {penalty:.1%}")
-        
-        if medium_maintenance > 0:
-            penalty = self.pricing_rules["issue_penalties"]["medium_severity_maintenance"]
-            issue_penalty += penalty
-            issue_details.append(f"Medium maintenance issues: {penalty:.1%}")
-        
-        # Multiple issues penalty
-        if len(cleaning_issues) > 0 and len(maintenance_issues) > 0:
-            penalty = self.pricing_rules["issue_penalties"]["multiple_issues"]
-            issue_penalty += penalty
-            issue_details.append(f"Multiple issue types: {penalty:.1%}")
-        
-        # Step 3: Combine GPT recommendation with rules
-        gpt_adjustment = gpt_price_rec / 100  # Convert percentage
-        rule_total = rule_adjustment + issue_penalty
-        
-        # Weighted combination
-        gpt_weight = self.pricing_rules["gpt_weight"]
-        rule_weight = 1 - gpt_weight
-        
-        combined_adjustment = (gpt_adjustment * gpt_weight) + (rule_total * rule_weight)
-        
-        # Step 4: Apply confidence weighting
-        combined_adjustment *= confidence
-        
-        # Step 5: Cap total adjustment
-        max_adj = self.pricing_rules["max_total_adjustment"]
-        combined_adjustment = max(-max_adj, min(max_adj, combined_adjustment))
-        
-        # Step 6: Calculate final pricing
-        new_price = int(base_price * (1 + combined_adjustment))
-        price_change = new_price - base_price
-        percentage_change = combined_adjustment * 100
-        
-        # Step 7: Build decision record
-        decision = {
-            "property": property_name,
-            "satisfaction_score": satisfaction_score,
-            "base_price": base_price,
-            "new_price": new_price,
-            "price_change": price_change,
-            "percentage_change": percentage_change,
-            "gpt_recommendation": gpt_price_rec,
-            "rule_adjustment": rule_total * 100,
-            "final_adjustment": combined_adjustment * 100,
-            "confidence": confidence,
-            "rule_description": rule_description,
-            "issue_penalties": issue_details,
-            "decision_logic": {
-                "gpt_weight": f"{gpt_weight:.0%}",
-                "rule_weight": f"{rule_weight:.0%}",
-                "confidence_applied": f"{confidence:.1%}"
-            },
-            "timestamp": datetime.now()
-        }
-        
-        # Update metrics
-        self.decision_history.append(decision)
-        self.performance_metrics["decisions_made"] += 1
-        current_avg = self.performance_metrics["avg_adjustment"]
-        count = self.performance_metrics["decisions_made"]
-        self.performance_metrics["avg_adjustment"] = (current_avg * (count-1) + abs(percentage_change)) / count
-        
-        return decision
-
-# ============================================================================
-# FRAMEWORK 3: A2A COMMUNICATION PROTOCOL - Inter-agent messaging
-# ============================================================================
-
-class A2ACommunicationLayer:
-    """
-    Structured agent-to-agent communication with full logging
-    """
-    
-    def __init__(self):
-        self.message_queue = []
-        self.conversation_log = []
-        self.registered_agents = {}
-        
-    def register_agent(self, agent_id: str, agent_instance):
-        """Register an agent for communication"""
-        self.registered_agents[agent_id] = {
-            "instance": agent_instance,
-            "inbox": [],
-            "status": "active",
-            "registered_at": datetime.now()
-        }
-        print(f"📡 A2A: Registered {agent_id}")
-    
-    def send_message(self, sender_id: str, recipient_id: str, message_type: str, payload: Dict[str, Any]) -> str:
-        """Send structured message between agents"""
-        message_id = f"a2a_{datetime.now().strftime('%H%M%S')}_{len(self.message_queue)}"
-        
-        message = {
-            "id": message_id,
-            "sender": sender_id,
-            "recipient": recipient_id,
-            "type": message_type,
-            "payload": payload,
-            "timestamp": datetime.now(),
-            "status": "sent"
-        }
-        
-        # Deliver message
-        if recipient_id in self.registered_agents:
-            self.registered_agents[recipient_id]["inbox"].append(message)
-            message["status"] = "delivered"
-            print(f"📤 A2A: {sender_id} → {recipient_id} ({message_type})")
-        else:
-            message["status"] = "failed"
-            print(f"❌ A2A: Failed to deliver to {recipient_id}")
-        
-        self.message_queue.append(message)
-        self.conversation_log.append(message)
-        
-        return message_id
-    
-    def get_messages(self, agent_id: str) -> List[Dict[str, Any]]:
-        """Retrieve and clear messages for an agent"""
-        if agent_id not in self.registered_agents:
-            return []
-        
-        messages = self.registered_agents[agent_id]["inbox"].copy()
-        self.registered_agents[agent_id]["inbox"].clear()
-        
-        return messages
-    
-    def get_communication_stats(self) -> Dict[str, Any]:
-        """Get communication statistics"""
-        if not self.conversation_log:
-            return {"total_messages": 0}
-        
-        stats = {
-            "total_messages": len(self.conversation_log),
-            "by_sender": {},
-            "by_type": {},
-            "delivery_rate": 0,
-            "recent_activity": []
-        }
-        
-        delivered = 0
-        for msg in self.conversation_log:
-            # Count by sender
-            sender = msg["sender"]
-            stats["by_sender"][sender] = stats["by_sender"].get(sender, 0) + 1
-            
-            # Count by type
-            msg_type = msg["type"]
-            stats["by_type"][msg_type] = stats["by_type"].get(msg_type, 0) + 1
-            
-            # Count delivery success
-            if msg["status"] == "delivered":
-                delivered += 1
-        
-        stats["delivery_rate"] = (delivered / len(self.conversation_log)) * 100
-        stats["recent_activity"] = self.conversation_log[-5:]  # Last 5 messages
-        
-        return stats
-
-# ============================================================================
-# LEARNING AND ADAPTATION SYSTEM
-# ============================================================================
-
-class CrossAgentLearningSystem:
-    """
-    Agents rate each other and adapt based on performance
-    """
-    
-    def __init__(self):
-        self.ratings = []
-        self.adaptations = []
-        
-    def submit_rating(self, rater: str, rated: str, task: str, score: float, context: Dict[str, Any]):
-        """Submit a rating from one agent to another"""
-        rating = {
-            "timestamp": datetime.now(),
-            "rater": rater,
-            "rated": rated,
-            "task": task,
-            "score": max(1.0, min(5.0, score)),  # 1-5 scale
-            "context": context
-        }
-        
-        self.ratings.append(rating)
-        print(f"📊 Learning: {rater} rates {rated} = {score:.1f}/5.0 for {task}")
-        
-        # Check if adaptation needed
-        recent_ratings = [r["score"] for r in self.ratings[-3:] if r["rated"] == rated and r["task"] == task]
-        if len(recent_ratings) >= 2 and sum(recent_ratings) / len(recent_ratings) < 3.0:
-            self._trigger_adaptation(rated, task, recent_ratings)
-        
-        return rating
-    
-    def _trigger_adaptation(self, agent: str, task: str, recent_scores: List[float]):
-        """Trigger adaptation for underperforming agent"""
-        avg_score = sum(recent_scores) / len(recent_scores)
-        
-        adaptation = {
-            "timestamp": datetime.now(),
-            "agent": agent,
-            "task": task,
-            "trigger_score": avg_score,
-            "improvement_actions": []
-        }
-        
-        if agent == "smart_openai_agent":
-            adaptation["improvement_actions"] = [
-                "Increase analysis confidence threshold",
-                "Add more specific examples in prompts",
-                "Request more detailed issue categorization"
-            ]
-        elif agent == "rule_based_pricing_engine":
-            adaptation["improvement_actions"] = [
-                "Adjust satisfaction score thresholds",
-                "Recalibrate issue penalty weights",
-                "Modify GPT-rule combination ratio"
-            ]
-        
-        self.adaptations.append(adaptation)
-        print(f"🔄 Learning: Adaptation triggered for {agent} (avg score: {avg_score:.1f})")
-        
-        return adaptation
-
-# ============================================================================
-# COMPREHENSIVE GUARDRAILS
-# ============================================================================
-
-class SystemGuardrails:
-    """
-    Safety systems to prevent failures and ensure reliability
-    """
-    
-    def __init__(self):
-        self.violations = []
-        self.limits = {
-            "max_price_change": 25,  # Max ±25% price change
-            "max_api_calls_per_minute": 20,
-            "max_cycle_iterations": 10,
-            "min_confidence": 0.2
-        }
-        self.api_calls = []
-        self.iteration_count = 0
-    
-    def check_pricing_safety(self, pricing_decision: Dict[str, Any]) -> bool:
-        """Ensure pricing changes are safe"""
-        change_pct = abs(pricing_decision.get("percentage_change", 0))
-        
-        if change_pct > self.limits["max_price_change"]:
-            # Cap the change
-            original = pricing_decision["base_price"]
-            max_change = self.limits["max_price_change"] / 100
-            
-            if pricing_decision["percentage_change"] > 0:
-                pricing_decision["new_price"] = int(original * (1 + max_change))
+        for i, result in enumerate(results):
+            property_name = LISTINGS[i][0]
+            if isinstance(result, Exception):
+                print(f"❌ Scraping failed for {property_name}: {result}")
             else:
-                pricing_decision["new_price"] = int(original * (1 - max_change))
-            
-            pricing_decision["percentage_change"] = self.limits["max_price_change"] * (1 if pricing_decision["percentage_change"] > 0 else -1)
-            pricing_decision["guardrail_applied"] = True
-            
-            self._log_violation("price_change_capped", f"Capped change from {change_pct:.1f}% to {self.limits['max_price_change']}%")
+                all_reviews.extend(result)
+                successful_scrapes += 1
+                print(f"✅ Scraped {len(result)} reviews from {property_name}")
         
-        return True
+        print(f"🏁 PARALLEL SCRAPING COMPLETE: {successful_scrapes}/{len(LISTINGS)} properties in {end_time - start_time:.1f}s")
+        return all_reviews
     
-    def check_api_limits(self) -> bool:
-        """Prevent API overuse"""
-        now = time.time()
-        self.api_calls = [t for t in self.api_calls if now - t < 60]  # Last minute
+    async def scrape_single_property(self, property_data):
+        """Optimized single property scraping"""
+        name, url, price = property_data
         
-        if len(self.api_calls) >= self.limits["max_api_calls_per_minute"]:
-            self._log_violation("api_rate_limit", f"Hit API limit: {len(self.api_calls)} calls/minute")
-            return False
-        
-        self.api_calls.append(now)
-        return True
-    
-    def check_iteration_limit(self) -> bool:
-        """Prevent infinite loops"""
-        self.iteration_count += 1
-        
-        if self.iteration_count > self.limits["max_cycle_iterations"]:
-            self._log_violation("iteration_limit", f"Exceeded {self.limits['max_cycle_iterations']} iterations")
-            return False
-        
-        return True
-    
-    def _log_violation(self, violation_type: str, description: str):
-        """Log safety violations"""
-        violation = {
-            "type": violation_type,
-            "description": description,
-            "timestamp": datetime.now()
-        }
-        self.violations.append(violation)
-        print(f"🚨 GUARDRAIL: {violation_type} - {description}")
-    
-    def get_safety_report(self) -> Dict[str, Any]:
-        """Get comprehensive safety report"""
-        return {
-            "total_violations": len(self.violations),
-            "violation_types": list(set(v["type"] for v in self.violations)),
-            "recent_violations": self.violations[-3:],
-            "current_limits": self.limits,
-            "api_calls_last_minute": len([t for t in self.api_calls if time.time() - t < 60])
-        }
-
-# ============================================================================
-# MAIN SMART PROPERTY MANAGER - Orchestrates everything
-# ============================================================================
-
-class SmartPropertyManager:
-    """
-    Final smart property manager with multi-framework integration
-    """
-    
-    def __init__(self):
-        # Core data
-        self.base_pricing = {name: price for name, url, price in LISTINGS}
-        self.satisfaction_scores = {}
-        self.detailed_analyses = {}  # Store full GPT analyses
-        self.pricing_decisions = {}
-        self.review_data = None
-        
-        # Multi-framework components
-        self.smart_ai = SmartOpenAIAgent(OPENAI_API_KEY)
-        self.pricing_engine = RuleBasedPricingEngine()
-        self.communication = A2ACommunicationLayer()
-        self.learning_system = CrossAgentLearningSystem()
-        self.guardrails = SystemGuardrails()
-        
-        # Register for A2A communication
-        self.communication.register_agent("smart_ai", self.smart_ai)
-        self.communication.register_agent("pricing_engine", self.pricing_engine)
-        self.communication.register_agent("coordinator", self)
-        
-        print("🚀 SMART MULTI-FRAMEWORK PROPERTY MANAGEMENT SYSTEM")
-        print(f"🏠 Portfolio: {len(LISTINGS)} properties")
-        print(f"🧠 Smart AI: GPT-4 analyzes everything automatically")
-        print(f"⚙️ Rule Engine: Transparent pricing decisions")
-        print(f"📡 A2A Protocol: Structured agent communication")
-        print(f"🛡️ Guardrails: Comprehensive safety systems")
-    
-    async def fetch_reviews(self, name, url):
-        """Fetch reviews with API safety"""
-        if not self.guardrails.check_api_limits():
-            print(f"⏳ API limit hit, waiting...")
-            await asyncio.sleep(15)
-        
-        client = ApifyClientAsync(APIFY_API_KEY)
+        client = ApifyClientAsync(self.api_key)
         actor = client.actor("voyager/booking-reviews-scraper")
         
         try:
+            print(f"🔄 Scraping: {name}")
+            
             run = await actor.call(
                 run_input={
                     "startUrls": [{"url": url}],
-                    "maxReviewsPerHotel": 50,  # Limit for demo
-                    "proxyConfiguration": {"useApifyProxy": True}
+                    "maxReviewsPerHotel": 40,  # Increased for better analysis
+                    "proxyConfiguration": {"useApifyProxy": True},
+                    "timeout": 120
                 },
-                wait_secs=180
+                wait_secs=120
             )
-            
-            print(f"✅ Reviews fetched: {name}")
             
             dataset = client.dataset(run["defaultDatasetId"])
             result = await dataset.list_items()
@@ -717,475 +456,497 @@ class SmartPropertyManager:
                         "comment": item["dislikedText"]
                     })
             
+            print(f"✅ {name}: {len(reviews)} reviews collected")
             return reviews
             
         except Exception as e:
-            print(f"❌ Error fetching {name}: {e}")
+            print(f"❌ Error scraping {name}: {e}")
             return []
+
+# ============================================================================
+# FAST PARALLEL EMAIL SYSTEM (UNCHANGED)
+# ============================================================================
+
+class FastEmailSystem:
+    """Parallel email sending system for speed"""
     
-    async def run_smart_analysis(self):
-        """
-        Run complete smart analysis with all frameworks
-        """
-        cycle_id = f"smart_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+    def __init__(self, config):
+        self.config = config
         
-        print("\n🧠 SMART MULTI-FRAMEWORK ANALYSIS STARTING")
-        print("=" * 70)
-        print(f"🆔 Cycle: {cycle_id}")
+    async def send_all_emails_parallel(self, cleaning_properties, maintenance_properties, pricing_changes):
+        """Send all emails in parallel for maximum speed"""
+        print(f"📧 PARALLEL EMAIL SENDING: Starting batch email dispatch")
         
-        # Step 1: Fetch all reviews
-        print(f"\n📋 STEP 1: FETCHING GUEST REVIEWS")
-        print("-" * 40)
+        email_tasks = []
         
-        all_reviews = []
-        for name, url, base_price in LISTINGS:
-            if not self.guardrails.check_iteration_limit():
-                print("⚠️ Iteration limit reached")
-                break
-            
-            print(f"🔄 Fetching: {name}")
-            reviews = await self.fetch_reviews(name, url)
-            all_reviews.extend(reviews)
+        if cleaning_properties:
+            task = self.send_cleaning_email_async(cleaning_properties)
+            email_tasks.append(("cleaning", task))
         
-        if not all_reviews:
-            print("⚠️ No reviews collected")
-            return {"error": "No reviews", "cycle_id": cycle_id}
+        if maintenance_properties:
+            task = self.send_maintenance_email_async(maintenance_properties)
+            email_tasks.append(("maintenance", task))
         
-        self.review_data = pd.DataFrame(all_reviews)
-        print(f"✅ Collected {len(all_reviews)} reviews from {self.review_data['listing'].nunique()} properties")
+        if pricing_changes:
+            task = self.send_pricing_email_async(pricing_changes)
+            email_tasks.append(("pricing", task))
         
-        # Step 2: Smart GPT Analysis for each property
-        print(f"\n🧠 STEP 2: SMART GPT ANALYSIS")
-        print("-" * 40)
+        if not email_tasks:
+            print("📧 No emails to send")
+            return 0
         
-        for property_name in self.review_data['listing'].unique():
-            property_data = self.review_data[self.review_data['listing'] == property_name]
-            positive_comments = property_data[property_data['type'] == 'positive']['comment'].tolist()
-            negative_comments = property_data[property_data['type'] == 'negative']['comment'].tolist()
-            
-            print(f"\n🏠 Analyzing: {property_name}")
-            print(f"   📊 {len(positive_comments)} positive, {len(negative_comments)} negative comments")
-            
-            # Smart GPT analyzes EVERYTHING automatically
-            gpt_analysis = self.smart_ai.analyze_all_guest_feedback(positive_comments, negative_comments)
-            
-            satisfaction_score = gpt_analysis.get("satisfaction_score", 80)
-            self.satisfaction_scores[property_name] = satisfaction_score
-            self.detailed_analyses[property_name] = gpt_analysis
-            
-            print(f"   🎯 Satisfaction: {satisfaction_score:.1f}%")
-            print(f"   🧹 Cleaning issues: {len(gpt_analysis.get('cleaning_issues', []))}")
-            print(f"   🔧 Maintenance issues: {len(gpt_analysis.get('maintenance_issues', []))}")
-            print(f"   💭 Guest sentiment: {gpt_analysis.get('guest_sentiment', 'neutral')}")
-            print(f"   🤖 GPT confidence: {gpt_analysis.get('confidence', 0.5):.2f}")
-            
-            # Send analysis via A2A to pricing engine
-            message_id = self.communication.send_message(
-                sender_id="smart_ai",
-                recipient_id="pricing_engine",
-                message_type="COMPREHENSIVE_ANALYSIS",
-                payload={
-                    "property": property_name,
-                    "analysis": gpt_analysis,
-                    "base_price": self.base_pricing[property_name]
-                }
-            )
-            print(f"   📤 A2A message sent: {message_id}")
-        
-        # Step 3: Rule-based pricing decisions
-        print(f"\n⚙️ STEP 3: SMART PRICING DECISIONS")
-        print("-" * 40)
-        
-        pricing_messages = self.communication.get_messages("pricing_engine")
-        total_revenue_impact = 0
-        
-        for message in pricing_messages:
-            if message["type"] == "COMPREHENSIVE_ANALYSIS":
-                payload = message["payload"]
-                property_name = payload["property"]
-                gpt_analysis = payload["analysis"]
-                base_price = payload["base_price"]
-                
-                # Rule-based pricing decision
-                pricing_decision = self.pricing_engine.calculate_smart_pricing(
-                    property_name, gpt_analysis, base_price
-                )
-                
-                # Apply guardrails
-                self.guardrails.check_pricing_safety(pricing_decision)
-                
-                self.pricing_decisions[property_name] = pricing_decision
-                
-                if abs(pricing_decision["price_change"]) >= 5:  # Significant change
-                    total_revenue_impact += pricing_decision["price_change"]
-                    
-                    trend = "📈" if pricing_decision["price_change"] > 0 else "📉"
-                    guardrail_note = " (CAPPED)" if pricing_decision.get("guardrail_applied") else ""
-                    
-                    print(f"\n🏠 {property_name}:")
-                    print(f"   💰 ${pricing_decision['base_price']} → ${pricing_decision['new_price']} ({pricing_decision['percentage_change']:+.1f}%) {trend}{guardrail_note}")
-                    print(f"   🤖 GPT recommended: {pricing_decision['gpt_recommendation']:+.0f}%")
-                    print(f"   ⚙️ Rule adjustment: {pricing_decision['rule_adjustment']:+.1f}%")
-                    print(f"   🎯 Final decision: {pricing_decision['rule_description']}")
-                    print(f"   🔒 Confidence: {pricing_decision['confidence']:.2f}")
-                else:
-                    print(f"\n🏠 {property_name}: ${base_price} (no significant change needed)")
-        
-        print(f"\n💵 Total Revenue Impact: ${total_revenue_impact:+.0f} per night")
-        print(f"📅 Monthly Projection: ${total_revenue_impact * 30:+.0f}")
-        
-        # Step 4: Cross-agent learning
-        print(f"\n🧠 STEP 4: CROSS-AGENT LEARNING")
-        print("-" * 40)
-        
-        # Smart AI rates Pricing Engine
-        for property_name, pricing_decision in self.pricing_decisions.items():
-            gpt_analysis = self.detailed_analyses[property_name]
-            gpt_rec = gpt_analysis.get("recommended_price_change", 0)
-            final_change = pricing_decision["percentage_change"]
-            
-            # Rate based on how well pricing engine incorporated GPT insights
-            if abs(final_change - gpt_rec) <= 5:
-                ai_rating = 4.5  # Good alignment
-            elif abs(final_change - gpt_rec) <= 10:
-                ai_rating = 3.5  # Reasonable alignment
-            else:
-                ai_rating = 2.5  # Poor alignment
-            
-            self.learning_system.submit_rating(
-                rater="smart_ai",
-                rated="pricing_engine",
-                task="pricing_decisions",
-                score=ai_rating,
-                context={
-                    "property": property_name,
-                    "gpt_recommendation": gpt_rec,
-                    "final_decision": final_change,
-                    "reasoning": f"GPT suggested {gpt_rec:+.0f}%, engine decided {final_change:+.1f}%"
-                }
-            )
-        
-        # Pricing Engine rates Smart AI
-        for property_name, gpt_analysis in self.detailed_analyses.items():
-            confidence = gpt_analysis.get("confidence", 0.5)
-            issue_count = len(gpt_analysis.get("cleaning_issues", [])) + len(gpt_analysis.get("maintenance_issues", []))
-            
-            # Rate based on analysis quality
-            if confidence > 0.8 and issue_count >= 0:
-                pricing_rating = 4.5  # High confidence, good analysis
-            elif confidence > 0.6:
-                pricing_rating = 3.5  # Good analysis
-            else:
-                pricing_rating = 2.5  # Low confidence
-            
-            self.learning_system.submit_rating(
-                rater="pricing_engine",
-                rated="smart_ai",
-                task="comprehensive_analysis",
-                score=pricing_rating,
-                context={
-                    "property": property_name,
-                    "confidence": confidence,
-                    "issues_detected": issue_count,
-                    "reasoning": f"Analysis confidence {confidence:.2f}, detected {issue_count} issues"
-                }
-            )
-        
-        # Step 5: Send smart notifications
-        print(f"\n📧 STEP 5: SMART NOTIFICATIONS")
-        print("-" * 40)
+        start_time = time.time()
+        results = await asyncio.gather(*[task for _, task in email_tasks], return_exceptions=True)
+        end_time = time.time()
         
         emails_sent = 0
-        
-        # Cleaning alerts
-        cleaning_properties = {name: analysis["cleaning_issues"] for name, analysis in self.detailed_analyses.items() if analysis.get("cleaning_issues")}
-        if cleaning_properties:
-            if self.send_smart_cleaning_alert(cleaning_properties):
+        for i, result in enumerate(results):
+            email_type = email_tasks[i][0]
+            if isinstance(result, Exception):
+                print(f"❌ {email_type} email failed: {result}")
+            elif result:
                 emails_sent += 1
-                print(f"✅ Smart cleaning alert sent ({len(cleaning_properties)} properties)")
+                print(f"✅ {email_type} email sent successfully")
+            else:
+                print(f"❌ {email_type} email failed")
         
-        # Maintenance alerts
-        maintenance_properties = {name: analysis["maintenance_issues"] for name, analysis in self.detailed_analyses.items() if analysis.get("maintenance_issues")}
-        if maintenance_properties:
-            if self.send_smart_maintenance_alert(maintenance_properties):
-                emails_sent += 1
-                print(f"✅ Smart maintenance alert sent ({len(maintenance_properties)} properties)")
-        
-        # Pricing report
-        significant_pricing_changes = {name: decision for name, decision in self.pricing_decisions.items() if abs(decision.get("price_change", 0)) >= 5}
-        if significant_pricing_changes:
-            if self.send_smart_pricing_report(significant_pricing_changes):
-                emails_sent += 1
-                print(f"✅ Smart pricing report sent ({len(significant_pricing_changes)} adjustments)")
-        
-        # Step 6: Final summary
-        print(f"\n📋 FINAL SMART ANALYSIS SUMMARY")
-        print("=" * 70)
-        print(f"🆔 Cycle: {cycle_id}")
-        print(f"🏠 Properties Analyzed: {len(self.satisfaction_scores)}")
-        print(f"📈 Average Satisfaction: {sum(self.satisfaction_scores.values()) / len(self.satisfaction_scores):.1f}%")
-        print(f"🧹 Properties with Cleaning Issues: {len(cleaning_properties)}")
-        print(f"🔧 Properties with Maintenance Issues: {len(maintenance_properties)}")
-        print(f"💰 Significant Pricing Changes: {len(significant_pricing_changes)}")
-        print(f"💵 Revenue Impact: ${total_revenue_impact:+.0f} per night")
-        print(f"📧 Emails Sent: {emails_sent}")
-        
-        # Multi-framework performance
-        ai_performance = self.smart_ai.performance_metrics
-        pricing_performance = self.pricing_engine.performance_metrics
-        comm_stats = self.communication.get_communication_stats()
-        safety_report = self.guardrails.get_safety_report()
-        
-        print(f"\n🤖 MULTI-FRAMEWORK PERFORMANCE:")
-        print(f"   🧠 Smart AI: {ai_performance['analyses_completed']} analyses, avg confidence {ai_performance['confidence_avg']:.2f}")
-        print(f"   ⚙️ Pricing Engine: {pricing_performance['decisions_made']} decisions, avg adjustment {pricing_performance['avg_adjustment']:.1f}%")
-        print(f"   📡 A2A Messages: {comm_stats['total_messages']} sent, {comm_stats.get('delivery_rate', 100):.0f}% delivered")
-        print(f"   🛡️ Safety Violations: {safety_report['total_violations']}")
-        print(f"   🧠 Learning Events: {len(self.learning_system.adaptations)} adaptations triggered")
-        
-        print("=" * 70)
-        
-        return {
-            "cycle_id": cycle_id,
-            "properties_analyzed": len(self.satisfaction_scores),
-            "average_satisfaction": sum(self.satisfaction_scores.values()) / len(self.satisfaction_scores) if self.satisfaction_scores else 0,
-            "cleaning_issues": len(cleaning_properties),
-            "maintenance_issues": len(maintenance_properties),
-            "pricing_adjustments": len(significant_pricing_changes),
-            "revenue_impact": total_revenue_impact,
-            "emails_sent": emails_sent,
-            "detailed_cleaning_data": cleaning_properties,
-            "detailed_maintenance_data": maintenance_properties,
-            "framework_performance": {
-                "smart_ai_analyses": ai_performance["analyses_completed"],
-                "pricing_decisions": pricing_performance["decisions_made"],
-                "a2a_messages": comm_stats["total_messages"],
-                "learning_events": len(self.learning_system.adaptations),
-                "safety_violations": safety_report["total_violations"]
-            }
-        }
+        print(f"📧 PARALLEL EMAIL COMPLETE: {emails_sent}/{len(email_tasks)} emails sent in {end_time - start_time:.1f}s")
+        return emails_sent
     
-    def send_email(self, subject, content, recipient):
-        """Send email with error handling"""
-        if EMAIL_CONFIG['demo_mode']:
-            print(f"📝 DEMO: Email would be sent to {recipient}")
-            return True
+    async def send_cleaning_email_async(self, cleaning_properties):
+        """Send cleaning email to MOURAD"""
+        def send_email_sync():
+            subject = f"🧹 ENHANCED CLEANING ALERT - {len(cleaning_properties)} Properties Need Attention"
+            content = self._generate_enhanced_cleaning_content(cleaning_properties)
+            return self._send_email_sync(subject, content, self.config['cleaning_team_email'])
         
-        try:
-            msg = MIMEText(content, 'plain', 'utf-8')
-            msg['Subject'] = subject
-            msg['From'] = EMAIL_CONFIG['sender_email']
-            msg['To'] = recipient
-            
-            context = ssl.create_default_context()
-            with smtplib.SMTP('smtp.gmail.com', 587) as server:
-                server.starttls(context=context)
-                server.login(EMAIL_CONFIG['sender_email'], EMAIL_CONFIG['sender_password'])
-                server.send_message(msg)
-            
-            print(f"✅ Email sent to {recipient}")
-            return True
-            
-        except Exception as e:
-            print(f"❌ Email failed: {e}")
-            return False
+        loop = asyncio.get_event_loop()
+        with ThreadPoolExecutor(max_workers=1) as executor:
+            return await loop.run_in_executor(executor, send_email_sync)
     
-    def send_smart_cleaning_alert(self, cleaning_properties):
-        """Send smart cleaning alert with GPT insights"""
-        if not cleaning_properties:
-            return False
+    async def send_maintenance_email_async(self, maintenance_properties):
+        """Send maintenance email to AHMED"""
+        def send_email_sync():
+            subject = f"🔧 ENHANCED MAINTENANCE ALERT - {len(maintenance_properties)} Properties Need Attention"
+            content = self._generate_enhanced_maintenance_content(maintenance_properties)
+            return self._send_email_sync(subject, content, self.config['maintenance_team_email'])
         
-        subject = f"🧹 SMART CLEANING ALERT - {len(cleaning_properties)} Properties Need Attention"
+        loop = asyncio.get_event_loop()
+        with ThreadPoolExecutor(max_workers=1) as executor:
+            return await loop.run_in_executor(executor, send_email_sync)
+    
+    async def send_pricing_email_async(self, pricing_changes):
+        """Send pricing email to AHMED"""
+        def send_email_sync():
+            subject = f"💰 PRICING OPTIMIZATION REPORT - {len(pricing_changes)} Properties Adjusted"
+            content = self._generate_pricing_content(pricing_changes)
+            return self._send_email_sync(subject, content, self.config['pricing_team_email'])
+        
+        loop = asyncio.get_event_loop()
+        with ThreadPoolExecutor(max_workers=1) as executor:
+            return await loop.run_in_executor(executor, send_email_sync)
+    
+    def _generate_enhanced_cleaning_content(self, cleaning_properties):
+        """Enhanced cleaning email with detailed issue breakdown"""
+        total_issues = sum(len(issues) for issues in cleaning_properties.values())
         
         content = f"""Hi Mourad,
 
-Our Smart AI System analyzed guest reviews and detected cleaning issues:
+ENHANCED AI ANALYSIS has detected {total_issues} cleaning issues across {len(cleaning_properties)} properties that require immediate attention.
 
-SMART CLEANING ANALYSIS:
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+🧹 DETAILED CLEANING ISSUES DETECTED:
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 """
         
         for property_name, issues in cleaning_properties.items():
-            content += f"🏠 {property_name} ({len(issues)} issues detected by AI):\n\n"
+            content += f"🏠 {property_name} ({len(issues)} issues detected):\n\n"
             
             for i, issue in enumerate(issues, 1):
                 severity = issue.get('severity', 'Medium')
                 location = issue.get('location', 'general')
                 problem = issue.get('problem', 'cleaning issue')
-                guest_comment = issue.get('guest_comment', '')
+                guest_comment = issue.get('guest_comment', '')[:100]
+                keywords = issue.get('keywords_detected', [])
                 
                 severity_emoji = "🚨" if severity == "High" else "⚠️" if severity == "Medium" else "ℹ️"
                 
                 content += f"   {i}. {severity_emoji} {severity} Priority - {location.title()}\n"
-                content += f"      Problem: {problem}\n"
-                content += f"      Guest said: \"{guest_comment[:120]}{'...' if len(guest_comment) > 120 else ''}\"\n\n"
+                content += f"      Issue: {problem}\n"
+                content += f"      Guest Said: \"{guest_comment}{'...' if len(guest_comment) == 100 else ''}\"\n"
+                if keywords:
+                    content += f"      Keywords: {', '.join(keywords)}\n"
+                content += "\n"
+            
+            content += "─" * 80 + "\n\n"
         
         content += f"""
-AI RECOMMENDATIONS:
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-• Focus on HIGH priority issues first (🚨)
-• Pay special attention to bathroom and kitchen areas
-• Address guest-mentioned specific problems
-• Total Properties: {len(cleaning_properties)}
-• Analysis Date: {datetime.now().strftime('%Y-%m-%d %H:%M')}
+🎯 PRIORITY ACTION REQUIRED:
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+• Total Properties Affected: {len(cleaning_properties)}
+• Total Issues to Address: {total_issues}
+• High Priority Issues: {sum(1 for issues in cleaning_properties.values() for issue in issues if issue.get('severity') == 'High')}
+• Guest Complaints Analyzed: Multiple per property
 
-This analysis was performed by GPT-4 AI analyzing real guest feedback.
+Focus on HIGH priority issues first (🚨), then medium (⚠️), then low (ℹ️).
+All issues detected are based on real guest complaints and affect our reputation.
 
-- Smart Property Management System"""
+Analysis Date: {datetime.now().strftime('%Y-%m-%d %H:%M')}
+Generated by Enhanced AI Property Management System
+
+Best regards,
+Enhanced Property Management System
+Powered by Advanced AI Detection"""
         
-        return self.send_email(subject, content, EMAIL_CONFIG['cleaning_team_email'])
+        return content
     
-    def send_smart_maintenance_alert(self, maintenance_properties):
-        """Send smart maintenance alert with detailed breakdown"""
-        if not maintenance_properties:
-            return False
-        
-        subject = f"🔧 SMART MAINTENANCE ALERT - {len(maintenance_properties)} Properties Need Service"
+    def _generate_enhanced_maintenance_content(self, maintenance_properties):
+        """Enhanced maintenance email with detailed issue breakdown"""
+        total_issues = sum(len(issues) for issues in maintenance_properties.values())
         
         content = f"""Hi Ahmed,
 
-Smart AI analysis of guest reviews found maintenance issues:
+ENHANCED AI ANALYSIS has detected {total_issues} maintenance issues across {len(maintenance_properties)} properties requiring your attention.
 
-SMART MAINTENANCE ANALYSIS:
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+🔧 DETAILED MAINTENANCE ISSUES DETECTED:
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 """
         
         for property_name, issues in maintenance_properties.items():
-            content += f"🏠 {property_name}:\n\n"
+            content += f"🏠 {property_name} ({len(issues)} issues detected):\n\n"
             
             for i, issue in enumerate(issues, 1):
                 category = issue.get('category', 'General')
                 severity = issue.get('severity', 'Medium')
                 urgency = issue.get('urgency', 'Soon')
                 problem = issue.get('problem', 'maintenance needed')
-                guest_comment = issue.get('guest_comment', '')
+                guest_comment = issue.get('guest_comment', '')[:100]
+                keywords = issue.get('keywords_detected', [])
                 
                 severity_emoji = "🚨" if severity == "High" else "⚠️" if severity == "Medium" else "ℹ️"
                 urgency_emoji = "⚡" if urgency == "Urgent" else "🔜" if urgency == "Soon" else "📅"
                 
                 content += f"   {i}. {severity_emoji} {category} Issue - {urgency} {urgency_emoji}\n"
                 content += f"      Problem: {problem}\n"
-                content += f"      Guest feedback: \"{guest_comment[:120]}{'...' if len(guest_comment) > 120 else ''}\"\n\n"
+                content += f"      Guest Said: \"{guest_comment}{'...' if len(guest_comment) == 100 else ''}\"\n"
+                if keywords:
+                    content += f"      Keywords: {', '.join(keywords)}\n"
+                content += "\n"
+            
+            content += "─" * 80 + "\n\n"
         
         content += f"""
-MAINTENANCE PRIORITIES:
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-⚡ URGENT: Schedule immediately
+🎯 MAINTENANCE PRIORITIES:
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+⚡ URGENT: Schedule immediately (same day)
 🔜 SOON: Schedule within 1-2 days  
 📅 CAN WAIT: Schedule within a week
 
-Focus on: WiFi, AC, TV, and bed comfort issues first.
-Date: {datetime.now().strftime('%Y-%m-%d %H:%M')}
+• Total Properties Affected: {len(maintenance_properties)}
+• Total Issues to Address: {total_issues}
+• Urgent Issues: {sum(1 for issues in maintenance_properties.values() for issue in issues if issue.get('urgency') == 'Urgent')}
+• Guest Complaints Analyzed: Multiple per property
 
-- Smart Property Management System"""
+All issues detected are based on real guest feedback and impact guest satisfaction.
+
+Analysis Date: {datetime.now().strftime('%Y-%m-%d %H:%M')}
+Generated by Enhanced AI Property Management System
+
+Best regards,
+Enhanced Property Management System
+Powered by Advanced AI Detection"""
         
-        return self.send_email(subject, content, EMAIL_CONFIG['sender_email'])
+        return content
     
-    def send_smart_pricing_report(self, pricing_changes):
-        """Send smart pricing report with AI insights"""
-        if not pricing_changes:
-            return False
-        
+    def _generate_pricing_content(self, pricing_changes):
+        """Pricing email content"""
         total_impact = sum(change['price_change'] for change in pricing_changes.values())
-        
-        subject = f"💰 SMART PRICING REPORT - AI-Driven Revenue Optimization ({len(pricing_changes)} Properties)"
         
         content = f"""Hi Ahmed,
 
-Smart Multi-Framework Pricing Analysis Report:
+PRICING OPTIMIZATION REPORT - AI Analysis Complete
 
-📊 EXECUTIVE SUMMARY:
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-• Properties Adjusted: {len(pricing_changes)}
-• Revenue Impact: ${total_impact:+.0f} per night
-• Monthly Projection: ${total_impact * 30:+.0f}
-• Analysis Method: GPT-4 + Rule-Based Engine + A2A Communication
-• Safety Guardrails: Applied automatically
-
-🧠 AI-DRIVEN PRICING DECISIONS:
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+💰 PRICING ADJUSTMENTS ({len(pricing_changes)} properties):
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 """
         
         for property_name, decision in pricing_changes.items():
-            gpt_analysis = self.detailed_analyses.get(property_name, {})
-            guest_sentiment = gpt_analysis.get('guest_sentiment', 'neutral')
-            
-            trend = "📈 INCREASE" if decision['price_change'] > 0 else "📉 DECREASE"
-            guardrail_note = " (SAFETY CAPPED)" if decision.get('guardrail_applied') else ""
-            
-            content += f"""🏠 {property_name}:
-   💰 ${decision['base_price']} → ${decision['new_price']} ({decision['percentage_change']:+.1f}%) {trend}{guardrail_note}
-   
-   🤖 AI Analysis:
-      • Guest Sentiment: {guest_sentiment.title()}
-      • GPT Recommendation: {decision['gpt_recommendation']:+.0f}%
-      • Satisfaction Score: {decision['satisfaction_score']:.1f}%
-   
-   ⚙️ Rule Engine:
-      • Rule Adjustment: {decision['rule_adjustment']:+.1f}%
-      • Logic: {decision['rule_description']}
-      • Confidence: {decision['confidence']:.2f}
-   
-   🎯 Final Decision Logic:
-      • GPT Weight: {decision['decision_logic']['gpt_weight']}
-      • Rule Weight: {decision['decision_logic']['rule_weight']}
-      • Confidence Applied: {decision['decision_logic']['confidence_applied']}
-
-"""
+            trend = "📈" if decision['price_change'] > 0 else "📉"
+            content += f"🏠 {property_name}: ${decision['base_price']} → ${decision['new_price']} ({decision['percentage_change']:+.1f}%) {trend}\n"
         
         content += f"""
-💡 SMART INSIGHTS:
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-• Daily Revenue Impact: ${total_impact:+.0f}
-• Monthly Projection: ${total_impact * 30:+.0f}
-• Annual Potential: ${total_impact * 365:+.0f}
 
-This report combines:
-✓ GPT-4 analysis of real guest feedback
-✓ Transparent rule-based pricing logic  
-✓ Multi-agent coordination and learning
-✓ Comprehensive safety guardrails
+📊 FINANCIAL IMPACT:
+• Revenue Impact: ${total_impact:+.0f} per night
+• Monthly Impact: ${total_impact * 30:+.0f}
+• Annual Projection: ${total_impact * 365:+.0f}
+• Analysis Date: {datetime.now().strftime('%Y-%m-%d %H:%M')}
 
-- Smart Multi-Framework Property Management System"""
+Generated by Enhanced AI Property Management System
+"""
+        return content
+    
+    def _send_email_sync(self, subject, content, recipient):
+        """Synchronous email sending"""
+        if self.config['demo_mode']:
+            print(f"📝 DEMO: Email would be sent to {recipient}")
+            return True
         
-        return self.send_email(subject, content, EMAIL_CONFIG['sender_email'])
+        if not self.config['sender_email'] or not self.config['sender_password']:
+            print(f"❌ Email credentials missing")
+            return False
+        
+        try:
+            msg = MIMEText(content, 'plain', 'utf-8')
+            msg['Subject'] = subject
+            msg['From'] = self.config['sender_email']
+            msg['To'] = recipient
+            
+            context = ssl.create_default_context()
+            with smtplib.SMTP('smtp.gmail.com', 587) as server:
+                server.starttls(context=context)
+                server.login(self.config['sender_email'], self.config['sender_password'])
+                server.send_message(msg)
+            
+            return True
+            
+        except Exception as e:
+            print(f"❌ Email failed: {e}")
+            return False
 
 # ============================================================================
-# MAIN EXECUTION
+# ENHANCED SMART PROPERTY MANAGER - FINAL VERSION
+# ============================================================================
+
+class UltraFastSmartPropertyManager:
+    """Enhanced property manager with SUPERIOR cleaning detection"""
+    
+    def __init__(self):
+        # Core data for all 7 properties
+        self.base_pricing = {name: price for name, url, price in LISTINGS}
+        self.satisfaction_scores = {}
+        self.detailed_analyses = {}
+        self.pricing_decisions = {}
+        self.review_data = None
+        
+        # Enhanced processing components
+        self.scraper = ParallelScrapingEngine(APIFY_API_KEY)
+        self.gpt_processor = EnhancedGPTProcessor(OPENAI_API_KEY)  # ENHANCED!
+        self.email_system = FastEmailSystem(EMAIL_CONFIG)
+        
+        print("🚀 ENHANCED SMART PROPERTY MANAGEMENT SYSTEM - FINAL VERSION")
+        print(f"🏠 Portfolio: {len(LISTINGS)} properties (ALL 7 PROPERTIES)")
+        print(f"🧹 ENHANCED CLEANING DETECTION: Catches ALL cleaning issues")
+        print(f"🔧 COMPREHENSIVE MAINTENANCE DETECTION: Nothing gets missed")
+        print(f"⚡ Parallel Processing: Maximum speed with maximum accuracy")
+        print("🎯 OPTIMIZED FOR COMPLETE ISSUE DETECTION!")
+    
+    async def run_ultra_fast_analysis(self):
+        """Enhanced complete analysis with SUPERIOR issue detection"""
+        total_start_time = time.time()
+        cycle_id = f"enhanced_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+        
+        print("\n🚀 ENHANCED SMART ANALYSIS STARTING")
+        print("=" * 80)
+        print(f"🆔 Cycle: {cycle_id}")
+        print(f"🏠 Properties: {len(LISTINGS)} (ALL 7 PROPERTIES)")
+        print(f"🧹 Enhanced Cleaning Detection: MAXIMUM SENSITIVITY")
+        
+        # STEP 1: PARALLEL SCRAPING
+        print(f"\n⚡ STEP 1: PARALLEL SCRAPING")
+        print("-" * 50)
+        
+        scraping_start = time.time()
+        all_reviews = await self.scraper.scrape_all_properties_parallel()
+        scraping_time = time.time() - scraping_start
+        
+        if not all_reviews:
+            print("⚠️ No reviews collected")
+            return {"error": "No reviews", "cycle_id": cycle_id}
+        
+        self.review_data = pd.DataFrame(all_reviews)
+        unique_properties = self.review_data['listing'].nunique()
+        
+        print(f"✅ SCRAPING COMPLETE: {len(all_reviews)} reviews from {unique_properties} properties in {scraping_time:.1f}s")
+        
+        # STEP 2: ENHANCED AI ANALYSIS
+        print(f"\n🧠 STEP 2: ENHANCED AI ANALYSIS WITH SUPERIOR DETECTION")
+        print("-" * 50)
+        
+        gpt_start = time.time()
+        
+        # Prepare data for enhanced GPT processing
+        property_data_list = []
+        for property_name in self.review_data['listing'].unique():
+            property_data = self.review_data[self.review_data['listing'] == property_name]
+            positive_comments = property_data[property_data['type'] == 'positive']['comment'].tolist()
+            negative_comments = property_data[property_data['type'] == 'negative']['comment'].tolist()
+            
+            property_data_list.append({
+                'name': property_name,
+                'positive_comments': positive_comments,
+                'negative_comments': negative_comments
+            })
+            
+            print(f"   🏠 {property_name}: {len(positive_comments)} positive, {len(negative_comments)} negative comments")
+        
+        # Execute ENHANCED parallel analysis
+        self.detailed_analyses = await self.gpt_processor.batch_analyze_properties(property_data_list)
+        
+        # Extract satisfaction scores and display enhanced results
+        total_cleaning_issues = 0
+        total_maintenance_issues = 0
+        
+        for property_name, analysis in self.detailed_analyses.items():
+            self.satisfaction_scores[property_name] = analysis.get('satisfaction_score', 80)
+            cleaning_count = len(analysis.get('cleaning_issues', []))
+            maintenance_count = len(analysis.get('maintenance_issues', []))
+            total_cleaning_issues += cleaning_count
+            total_maintenance_issues += maintenance_count
+            
+            print(f"   ✅ {property_name}: {cleaning_count} cleaning + {maintenance_count} maintenance issues")
+        
+        gpt_time = time.time() - gpt_start
+        print(f"✅ ENHANCED ANALYSIS COMPLETE: {len(self.detailed_analyses)} properties analyzed in {gpt_time:.1f}s")
+        print(f"🧹 TOTAL CLEANING ISSUES DETECTED: {total_cleaning_issues}")
+        print(f"🔧 TOTAL MAINTENANCE ISSUES DETECTED: {total_maintenance_issues}")
+        
+        # STEP 3: FAST PRICING DECISIONS
+        print(f"\n💰 STEP 3: SMART PRICING CALCULATIONS")
+        print("-" * 50)
+        
+        pricing_start = time.time()
+        total_revenue_impact = 0
+        
+        for property_name, analysis in self.detailed_analyses.items():
+            base_price = self.base_pricing.get(property_name, 200)
+            satisfaction = analysis.get('satisfaction_score', 80)
+            gpt_recommendation = analysis.get('recommended_price_change', 0)
+            
+            # Enhanced pricing calculation based on issues
+            cleaning_issues = len(analysis.get('cleaning_issues', []))
+            maintenance_issues = len(analysis.get('maintenance_issues', []))
+            total_issues = cleaning_issues + maintenance_issues
+            
+            # Base pricing adjustment
+            if satisfaction >= 90:
+                price_change_pct = 0.10
+            elif satisfaction >= 85:
+                price_change_pct = 0.05
+            elif satisfaction >= 75:
+                price_change_pct = 0.0
+            elif satisfaction >= 65:
+                price_change_pct = -0.05
+            else:
+                price_change_pct = -0.10
+            
+            # Issue penalty
+            issue_penalty = -(total_issues * 0.02)  # 2% per issue
+            
+            # Combine factors
+            final_change = price_change_pct + issue_penalty + (gpt_recommendation / 100 * 0.2)
+            final_change = max(-0.25, min(0.25, final_change))
+            
+            new_price = int(base_price * (1 + final_change))
+            price_change = new_price - base_price
+            
+            self.pricing_decisions[property_name] = {
+                'base_price': base_price,
+                'new_price': new_price,
+                'price_change': price_change,
+                'percentage_change': final_change * 100,
+                'satisfaction_score': satisfaction,
+                'cleaning_issues': cleaning_issues,
+                'maintenance_issues': maintenance_issues
+            }
+            
+            if abs(price_change) >= 5:
+                total_revenue_impact += price_change
+        
+        pricing_time = time.time() - pricing_start
+        print(f"✅ PRICING COMPLETE: {len(self.pricing_decisions)} decisions in {pricing_time:.1f}s")
+        
+        # STEP 4: ENHANCED EMAIL DISPATCH
+        print(f"\n📧 STEP 4: ENHANCED EMAIL DISPATCH")
+        print("-" * 50)
+        
+        email_start = time.time()
+        
+        # Collect issues for emails
+        cleaning_properties = {name: analysis.get("cleaning_issues", []) 
+                             for name, analysis in self.detailed_analyses.items() 
+                             if analysis.get("cleaning_issues")}
+        
+        maintenance_properties = {name: analysis.get("maintenance_issues", []) 
+                                for name, analysis in self.detailed_analyses.items() 
+                                if analysis.get("maintenance_issues")}
+        
+        significant_pricing = {name: decision 
+                             for name, decision in self.pricing_decisions.items() 
+                             if abs(decision.get("price_change", 0)) >= 5}
+        
+        print(f"   📧 Cleaning email to Mourad: {len(cleaning_properties)} properties with {sum(len(issues) for issues in cleaning_properties.values())} issues")
+        print(f"   📧 Maintenance email to Ahmed: {len(maintenance_properties)} properties with {sum(len(issues) for issues in maintenance_properties.values())} issues")
+        print(f"   📧 Pricing email to Ahmed: {len(significant_pricing)} pricing adjustments")
+        
+        # Send emails in parallel
+        emails_sent = await self.email_system.send_all_emails_parallel(
+            cleaning_properties, maintenance_properties, significant_pricing
+        )
+        
+        email_time = time.time() - email_start
+        total_time = time.time() - total_start_time
+        
+        # ENHANCED FINAL SUMMARY
+        print(f"\n🏁 ENHANCED ANALYSIS COMPLETE")
+        print("=" * 80)
+        print(f"⚡ TOTAL TIME: {total_time:.1f} seconds")
+        print(f"🔄 Scraping Time: {scraping_time:.1f}s")
+        print(f"🧠 Enhanced Analysis Time: {gpt_time:.1f}s")
+        print(f"💰 Pricing Time: {pricing_time:.1f}s")
+        print(f"📧 Email Time: {email_time:.1f}s")
+        print("")
+        print(f"🏠 Properties Processed: {len(self.satisfaction_scores)}/7 (ALL PROPERTIES)")
+        print(f"📊 Average Satisfaction: {sum(self.satisfaction_scores.values()) / len(self.satisfaction_scores):.1f}%" if self.satisfaction_scores else "N/A")
+        print(f"🧹 CLEANING ISSUES DETECTED: {total_cleaning_issues} (Enhanced Detection)")
+        print(f"🔧 MAINTENANCE ISSUES DETECTED: {total_maintenance_issues} (Enhanced Detection)")
+        print(f"💰 Pricing Adjustments: {len(significant_pricing)} properties")
+        print(f"💵 Revenue Impact: ${total_revenue_impact:+.0f} per night")
+        print(f"📧 Emails Sent: {emails_sent}")
+        print("")
+        print(f"🎯 DETECTION IMPROVEMENT: Enhanced AI catches {total_cleaning_issues + total_maintenance_issues} total issues")
+        print(f"📧 EMAIL ROUTING: Cleaning→Mourad, Maintenance→Ahmed, Pricing→Ahmed")
+        print("=" * 80)
+        
+        return {
+            "cycle_id": cycle_id,
+            "total_time": total_time,
+            "scraping_time": scraping_time,
+            "gpt_time": gpt_time,
+            "pricing_time": pricing_time,
+            "email_time": email_time,
+            "properties_analyzed": len(self.satisfaction_scores),
+            "average_satisfaction": sum(self.satisfaction_scores.values()) / len(self.satisfaction_scores) if self.satisfaction_scores else 0,
+            "cleaning_issues": total_cleaning_issues,
+            "maintenance_issues": total_maintenance_issues,
+            "pricing_adjustments": len(significant_pricing),
+            "revenue_impact": total_revenue_impact,
+            "emails_sent": emails_sent,
+            "enhancement_note": f"Enhanced detection found {total_cleaning_issues + total_maintenance_issues} total issues",
+            "email_routing": "Cleaning→Mourad, Maintenance→Ahmed, Pricing→Ahmed"
+        }
+
+# ============================================================================
+# USAGE
 # ============================================================================
 
 async def main():
-    """Main execution - runs smart multi-framework system"""
-    manager = SmartPropertyManager()
-    result = await manager.run_smart_analysis()
+    """Run the enhanced system"""
+    manager = UltraFastSmartPropertyManager()
+    result = await manager.run_ultra_fast_analysis()
     return result
 
-# ============================================================================
-# SCRIPT EXECUTION
-# ============================================================================
-
 if __name__ == "__main__":
-    print("🧠 SMART MULTI-FRAMEWORK PROPERTY MANAGEMENT SYSTEM")
-    print("=" * 70)
-    print("🎯 FINAL CAPSTONE VERSION:")
-    print("   ✅ Smart GPT: Analyzes ALL issues automatically (cleaning, AC, TV, bed, etc.)")
-    print("   ✅ Rule-Based Engine: Transparent, auditable pricing decisions")
-    print("   ✅ A2A Communication: Structured inter-agent messaging")
-    print("   ✅ Cross-Agent Learning: Agents rate and adapt to each other")
-    print("   ✅ Safety Guardrails: Comprehensive protection systems")
-    print("   ✅ Real Reviews: Uses actual guest feedback for analysis")
-    print("   ✅ Smart Pricing: Combines GPT insights with business rules")
-    print("=" * 70)
-    
-    print("\n🚀 Running smart multi-framework analysis...")
-    result = asyncio.run(main())
-    
-    print(f"\n🎉 SMART ANALYSIS COMPLETED!")
-    print(f"📊 Results: {json.dumps(result, indent=2, default=str)}")
-
-# ============================================================================
-# END OF SMART SYSTEM
-# ============================================================================
+    asyncio.run(main())
